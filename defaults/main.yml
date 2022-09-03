@@ -1,0 +1,6 @@
+---
+secure_sshd_name: ssh
+secure_sshd_config: /etc/ssh/sshd_config
+
+secure_ssh_user_groups: sudo
+secure_ssh_nopasswd: true

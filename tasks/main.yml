@@ -1,0 +1,54 @@
+---
+- name: Secure SSH | Add standart ssh user
+  ansible.builtin.user:
+    name: "{{ secure_ssh_user }}"
+    shell: /bin/bash
+    append: true
+    groups: "{{ secure_ssh_user_groups }}"
+
+- name: Secure SSH | Add identity key to authorized keys on host
+  ansible.posix.authorized_key:
+    user: "{{ secure_ssh_user }}"
+    key: "{{ lookup('file', secure_ssh_identity_key) }}"
+  register: secure_add_identity_key
+  when: secure_ssh_identity_key is defined and secure_ssh_user is defined
+
+- name: Secure SSH | Disable empty password login
+  ansible.builtin.lineinfile:
+    dest: "{{ secure_sshd_config }}"
+    regexp: '^#?PermitEmptyPasswords'
+    line: 'PermitEmptyPasswords no'
+  notify: Restart sshd
+
+- name: Secure SSH | Disable remote root login
+  ansible.builtin.lineinfile:
+    dest: "{{ secure_sshd_config }}"
+    regexp: '^#?PermitRootLogin'
+    line: 'PermitRootLogin no'
+  notify: Restart sshd
+
+- name: Secure SSH | Disable password login
+  ansible.builtin.lineinfile:
+    dest: "{{ secure_sshd_config }}"
+    regexp: '^(#\s*)?PasswordAuthentication '
+    line: 'PasswordAuthentication no'
+  when:
+    - secure_add_identity_key is succeeded
+    - not secure_add_identity_key is skipped
+  notify: Restart sshd
+
+- name: Secure SSH | Enable PAM
+  ansible.builtin.lineinfile:
+    dest: "{{ secure_sshd_config }}"
+    regexp: '^#?UsePAM'
+    line: 'UsePAM yes'
+  notify: Restart sshd
+
+- name: Secure SSH | Create sudo file with no-password option, if standart user have sudo group
+  ansible.builtin.template:
+    src: sudouser.j2
+    dest: "/etc/sudoers.d/{{ secure_ssh_user }}"
+    owner: root
+    group: root
+    mode: 0440
+  when: secure_ssh_nopasswd
